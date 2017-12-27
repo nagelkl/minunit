@@ -47,6 +47,7 @@
 #include <sys/time.h>	/* gethrtime(), gettimeofday() */
 #include <sys/resource.h>
 #include <sys/times.h>
+#include <string.h>
 
 #if defined(__MACH__) && defined(__APPLE__)
 #include <mach/mach.h>
@@ -79,12 +80,12 @@ static double minunit_proc_timer = 0;
 static char minunit_last_message[MINUNIT_MESSAGE_LEN];
 
 /*  Test setup and teardown function pointers */
-static void (*minunit_setup)() = NULL;
-static void (*minunit_teardown)() = NULL;
+static void (*minunit_setup)(void) = NULL;
+static void (*minunit_teardown)(void) = NULL;
 
 /*  Definitions */
-#define MU_TEST(method_name) static void method_name()
-#define MU_TEST_SUITE(suite_name) static void suite_name()
+#define MU_TEST(method_name) static void method_name(void)
+#define MU_TEST_SUITE(suite_name) static void suite_name(void)
 
 #define MU__SAFE_BLOCK(block) do {\
 	block\
@@ -195,6 +196,25 @@ static void (*minunit_teardown)() = NULL;
 	}\
 )
 
+#define mu_assert_string_eq(expected, result) MU__SAFE_BLOCK(\
+	const char* minunit_tmp_e = expected;\
+	const char* minunit_tmp_r = result;\
+	minunit_assert++;\
+	if (!minunit_tmp_e) {\
+		minunit_tmp_e = "<null pointer>";\
+	}\
+	if (!minunit_tmp_r) {\
+		minunit_tmp_r = "<null pointer>";\
+	}\
+	if(strcmp(minunit_tmp_e, minunit_tmp_r)) {\
+		snprintf(minunit_last_message, MINUNIT_MESSAGE_LEN, "%s failed:\n\t%s:%d: '%s' expected but was '%s'", __func__, __FILE__, __LINE__, minunit_tmp_e, minunit_tmp_r);\
+		minunit_status = 1;\
+		return;\
+	} else {\
+		printf(".");\
+	}\
+)
+
 /*
  * The following two functions were written by David Robert Nadeau
  * from http://NadeauSoftware.com/ and distributed under the
@@ -208,7 +228,7 @@ static void (*minunit_teardown)() = NULL;
  * The returned real time is only useful for computing an elapsed time
  * between two calls to this function.
  */
-static double mu_timer_real( )
+static double mu_timer_real(void)
 {
 #if defined(_WIN32)
 	/* Windows 2000 and later. ---------------------------------- */
@@ -242,6 +262,7 @@ static double mu_timer_real( )
 
 #elif defined(_POSIX_VERSION)
 	/* POSIX. --------------------------------------------------- */
+	struct timeval tm;
 #if defined(_POSIX_TIMERS) && (_POSIX_TIMERS > 0)
 	{
 		struct timespec ts;
@@ -271,7 +292,6 @@ static double mu_timer_real( )
 #endif /* _POSIX_TIMERS */
 
 	/* AIX, BSD, Cygwin, HP-UX, Linux, OSX, POSIX, Solaris. ----- */
-	struct timeval tm;
 	gettimeofday( &tm, NULL );
 	return (double)tm.tv_sec + (double)tm.tv_usec / 1000000.0;
 #else
@@ -283,7 +303,7 @@ static double mu_timer_real( )
  * Returns the amount of CPU time used by the current process,
  * in seconds, or -1.0 if an error occurred.
  */
-static double mu_timer_cpu( )
+static double mu_timer_cpu(void)
 {
 #if defined(_WIN32)
 	/* Windows -------------------------------------------------- */
